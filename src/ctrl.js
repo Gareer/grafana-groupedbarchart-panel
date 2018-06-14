@@ -5,7 +5,7 @@ import TimeSeries from 'app/core/time_series';
 import * as d3 from './external/d3.v3.min';
 import './css/groupedBarChart.css!';
 // import groupedBarChart from './external/groupedBarChart';
-
+//TODO: Ajust the size according to window size and display different bars among labels.
 const panelDefaults = {
     legend: {
         show: true
@@ -99,19 +99,22 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
                 this.height = opts.height;
                 this.showLegend = opts.legend;
                 this.element = elem.find(opts.element)[0];
-                this.options = d3.keys(this.data[0]).filter(function(key) { return key !== 'label'; });
-                this.avgList = {};
-                this.options.forEach(d=>{this.avgList[d] = 0});
-                this.options = this.options.filter(d=>d!=='valores');
-                this.data.forEach(d=> {
-                    d.valores = this.options.map(name=> {
-                        this.avgList[name] = this.avgList[name] + d[name];
-                        return {name: name, value: +d[name]};
+                let keyTotalLength = {};
+                this.options = [];
+                this.data.forEach(d => {
+                    this.options = _.union(this.options, _.keys(d).filter(k => k !== 'label' && k !==  'valores'));
+                });
+                this.options.forEach(k => {keyTotalLength[k] = 0});
+                this.data.forEach(d => {
+                    d.valores = this.options.map(name => {
+                        if (d[name]) keyTotalLength[name] = keyTotalLength[name] + d[name];
+                        return {name: name, value: d[name] || 1};
                     });
                 });
-                this.options.forEach(d=>{
-                    this.avgList[d] /= this.data.length;
+                this.options.forEach(d => {
+                    keyTotalLength[d] /= this.data.length;
                 });
+                this.avgList = keyTotalLength;
                 if(opts.color.length == 0) {
                     this.color = d3.scale.ordinal()
                         .range(d3.scale.category20().range());
@@ -176,14 +179,14 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
             addBar() {
                 this.options.forEach(d=> {
                     this.svg.append('line')
-                        .attr('x1', this.x(this.avgList[d]))
+                        .attr('x1', this.x(this.avgList[d] || 0))
                         .attr('y1', this.height)
-                        .attr('x2', this.x(this.avgList[d]))
+                        .attr('x2', this.x(this.avgList[d] || 0))
                         .attr('y2', 0)
                         .attr('class', `${d} avgLine`)
                         .attr('transform', `translate(${this.margin.left}, 0)`)
                         .style('display', 'none')
-                        .style('stroke-width', 2)
+                        .style('stroke-width', 0.5)
                         .style('stroke', this.color(d))
                         .style('stroke-opacity', 0.7);
                 });
@@ -214,22 +217,22 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
                     .attr('dy', '.35em')
                     .text(d=> { return d.value; });
 
-                this.bar.on('mouseover', d=> {
-                    this.tips.style('left', `${10}px`);
-                    this.tips.style('top', `${15}px`);
-                    this.tips.style('display', "inline-block");
-                    let elements = d3.selectAll(':hover')[0];
-                    let elementData = elements[elements.length-1].__data__;
-                    this.tips.html(`${d.label} , ${elementData.name} ,  ${elementData.value}`);
-                    d3.selectAll(`.${elementData.name}`)[0][0].style.display = '';
-                });
+                // this.bar.on('mouseover', d=> {
+                //     this.tips.style('left', `${10}px`);
+                //     this.tips.style('top', `${15}px`);
+                //     this.tips.style('display', "inline-block");
+                //     let elements = d3.selectAll(':hover')[0];
+                //     let elementData = elements[elements.length-1].__data__;
+                //     this.tips.html(`${d.label} , ${elementData.name} ,  ${elementData.value}`);
+                //     d3.selectAll(`.${elementData.name}`)[0][0].style.display = '';
+                // });
 
-                this.bar.on('mouseout', d=> {
-                    this.tips.style('display', "none");
-                    d3.selectAll('.avgLine')[0].forEach(d=> {
-                       d.style.display = 'none';
-                    });
-                });
+                // this.bar.on('mouseout', d=> {
+                //     this.tips.style('display', "none");
+                //     d3.selectAll('.avgLine')[0].forEach(d=> {
+                //        d.style.display = 'none';
+                //     });
+                // });
             }
 
             addLegend() {
