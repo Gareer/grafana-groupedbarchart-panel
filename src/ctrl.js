@@ -233,15 +233,15 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
                         let color = self.color(d.name);
                         // this.tips.html(`${d.name} ,  ${d.value}`);
                         d3.select(this).style("fill", d3.rgb(color).darker(2));
-                        self.tips
-                            .style('display', 'inline')
+                        self.tooltip
+                            .style('opacity', 0.9)
                             .style('left', (event.pageX - 34) + 'px')
                             .style('top', (event.pageY - 12) + 'px')
-                            .html(`<strong>${d.name}:</strong> <span style='color:red'>${d.value}</span>`);
+                            .html(`<strong>${d.name}:</strong><span style='color:red'> ${d.value}</span>`);
                     })
                     .on("mouseout", function(d) {
                         d3.select(this).style("fill", self.color(d.name));
-                        self.tips.style('display', "none");
+                        self.tooltip.style('opacity', 0);
                     });
             }
 
@@ -269,9 +269,9 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
             }
 
             addTooltips() {
-                this.tips = this.svg.append('div')
+                this.tooltip = d3.select('body').append('div')
                                     .attr('class', 'tooltip')
-                                    .style('display', 'none');
+                                    .style('opacity', 0);
             }
         }
 

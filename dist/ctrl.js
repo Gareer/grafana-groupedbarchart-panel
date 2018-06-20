@@ -82,8 +82,10 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                 valueName: 'current',
                 strokeWidth: 1,
                 fontSize: '80%',
-                width: 800,
-                height: 400,
+                width: 960,
+                height: 500,
+                fixedWidth: 960,
+                fixedHeight: 500,
                 colorSet: [],
                 colorSch: []
             };
@@ -101,11 +103,13 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                     _this.data = null;
 
                     _.defaults(_this.panel, panelDefaults);
+                    _this.setPanelSize();
 
                     _this.events.on('init-edit-mode', _this.onInitEditMode.bind(_this));
                     _this.events.on('data-received', _this.onDataReceived.bind(_this));
                     _this.events.on('data-snapshot-load', _this.onDataReceived.bind(_this));
                     _this.events.on('data-error', _this.onDataError.bind(_this));
+                    _this.events.on('panel-size-changed', _this.onPanelSizeChanged.bind(_this));
                     return _this;
                 }
 
@@ -114,6 +118,35 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                     value: function onInitEditMode() {
                         this.addEditorTab('Options', 'public/plugins/grafana-groupedbarchart-panel/partials/editor.html', 2);
                         this.addEditorTab('Colors', 'public/plugins/grafana-groupedbarchart-panel/partials/colors.html', 3);
+                    }
+                }, {
+                    key: 'setPanelSize',
+                    value: function setPanelSize(isFromUI) {
+                        var h = Math.ceil(this.panel.fixedHeight / 30);
+                        var w = Math.ceil(this.panel.fixedWidth / 50);
+                        if (isFromUI) {
+                            // Set panel width and height from panel UI
+                            if (w !== this.panel.gridPos.w || h !== this.panel.gridPos.h) {
+                                var gridPos = { x: 0, y: 0, w: 0, h: 0 };
+                                gridPos.h = h;
+                                gridPos.w = w;
+                                this.panel.updateGridPos(gridPos);
+                            }
+                        } else {
+                            // Read panel width and height from default panel
+                            if (w !== this.panel.gridPos.w || h !== this.panel.gridPos.h) {
+                                this.panel.fixedHeight = this.panel.gridPos.h * 30;
+                                this.panel.fixedWidth = this.panel.gridPos.w * 50;
+                            }
+                        }
+                        this.panel.height = this.panel.fixedHeight * 0.95;
+                        this.panel.width = this.panel.fixedWidth * 0.85;
+                    }
+                }, {
+                    key: 'onPanelSizeChanged',
+                    value: function onPanelSizeChanged(isFromUI) {
+                        this.setPanelSize(isFromUI);
+                        this.render();
                     }
                 }, {
                     key: 'setUnitFormat',
@@ -140,7 +173,6 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                 }, {
                     key: 'onDataReceived',
                     value: function onDataReceived(dataList) {
-
                         var o = _.groupBy(dataList[0].rows, function (e) {
                             return e[0];
                         });
@@ -151,8 +183,8 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                             o[i] = _.forOwn(t, function (sum, tid) {
                                 t[tid] = sum.map(function (s) {
                                     return s[2];
-                                }).reduce(function (x, y) {
-                                    return x + y;
+                                }).reduce(function (y, x) {
+                                    return y + x;
                                 });
                             });
                         });
@@ -192,24 +224,16 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                                 this.height = opts.height;
                                 this.showLegend = opts.legend;
                                 this.element = elem.find(opts.element)[0];
-                                this.options = d3.keys(this.data[0]).filter(function (key) {
-                                    return key !== 'label';
-                                });
-                                this.avgList = {};
-                                this.options.forEach(function (d) {
-                                    _this3.avgList[d] = 0;
-                                });
-                                this.options = this.options.filter(function (d) {
-                                    return d !== 'valores';
+                                this.options = [];
+                                this.data.forEach(function (d) {
+                                    _this3.options = _.union(_this3.options, _.keys(d).filter(function (k) {
+                                        return k !== 'label' && k !== 'valores';
+                                    }));
                                 });
                                 this.data.forEach(function (d) {
                                     d.valores = _this3.options.map(function (name) {
-                                        _this3.avgList[name] = _this3.avgList[name] + d[name];
-                                        return { name: name, value: +d[name] };
+                                        return { name: name, value: d[name] || 0 };
                                     });
-                                });
-                                this.options.forEach(function (d) {
-                                    _this3.avgList[d] /= _this3.data.length;
                                 });
                                 if (opts.color.length == 0) {
                                     this.color = d3.scale.ordinal().range(d3.scale.category20().range());
@@ -225,7 +249,7 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                                 value: function draw() {
                                     d3.select(this.element).html("");
                                     this.svg = d3.select(this.element).append('svg');
-                                    this.svg.attr('width', this.width).attr('height', this.height).attr('transform', 'translate(0, ' + this.margin.top + ')');
+                                    this.svg.attr('width', this.width + this.margin.left + this.margin.right).attr("height", this.height + this.margin.top + this.margin.bottom).append("g").attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
 
                                     this.createScales();
                                     this.addAxes();
@@ -236,85 +260,67 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                             }, {
                                 key: 'createScales',
                                 value: function createScales() {
-                                    this.y0 = d3.scale.ordinal().rangeRoundBands([this.height, 0], .2, 0.5);
+                                    this.x0 = d3.scale.ordinal().rangeRoundBands([0, this.width], .5);
 
-                                    this.y1 = d3.scale.ordinal();
+                                    this.x1 = d3.scale.ordinal();
 
-                                    this.x = d3.scale.linear().range([0, this.width]);
+                                    this.y = d3.scale.linear().range([this.height, 0]);
                                 }
                             }, {
                                 key: 'addAxes',
                                 value: function addAxes() {
-                                    this.xAxis = d3.svg.axis().scale(this.x).tickSize(-this.height).orient('bottom');
+                                    this.xAxis = d3.svg.axis().scale(this.x0).tickSize(0).orient("bottom");
 
-                                    this.yAxis = d3.svg.axis().scale(this.y0).orient('left');
+                                    this.yAxis = d3.svg.axis().scale(this.y).orient("left");
 
-                                    this.y0.domain(this.data.map(function (d) {
+                                    this.x0.domain(this.data.map(function (d) {
                                         return d.label;
                                     }));
-                                    this.y1.domain(this.options).rangeRoundBands([0, this.y0.rangeBand()]);
-                                    this.x.domain([0, d3.max(this.data, function (d) {
+                                    this.x1.domain(this.options).rangeRoundBands([0, this.x0.rangeBand()]);
+                                    this.y.domain([0, d3.max(this.data, function (d) {
                                         return d3.max(d.valores, function (d) {
                                             return d.value;
                                         });
                                     })]);
 
-                                    this.svg.append('g').attr('class', 'x axis').attr('transform', 'translate(' + this.margin.left + ', ' + this.height + ')').call(this.xAxis);
+                                    this.svg.append("g").attr("class", "x axis").attr("transform", "translate(0," + this.height + ")").call(this.xAxis);
 
-                                    this.svg.append('g').attr('class', 'y axis').attr('transform', 'translate(' + this.margin.left + ', 0)').call(this.yAxis);
+                                    this.svg.append("g").attr("class", "y axis").style('opacity', '0').call(this.yAxis).append("text").attr("transform", "rotate(-90)").attr("y", 6).attr("dy", ".71em").style("text-anchor", "end").style('font-weight', 'bold').text("Value");
                                 }
                             }, {
                                 key: 'addBar',
                                 value: function addBar() {
                                     var _this4 = this;
 
-                                    this.options.forEach(function (d) {
-                                        _this4.svg.append('line').attr('x1', _this4.x(_this4.avgList[d])).attr('y1', _this4.height).attr('x2', _this4.x(_this4.avgList[d])).attr('y2', 0).attr('class', d + ' avgLine').attr('transform', 'translate(' + _this4.margin.left + ', 0)').style('display', 'none').style('stroke-width', 2).style('stroke', _this4.color(d)).style('stroke-opacity', 0.7);
-                                    });
-
-                                    this.bar = this.svg.selectAll('.bar').data(this.data).enter().append('g').attr('class', 'rect').attr('transform', function (d) {
-                                        return 'translate(' + _this4.margin.left + ', ' + _this4.y0(d.label) + ')';
+                                    var self = this;
+                                    this.bar = this.svg.selectAll('.bar').data(this.data).enter().append('g').attr('class', 'g').attr('transform', function (d) {
+                                        return 'translate(' + _this4.x0(d.label) + ', 0)';
                                     });
 
                                     this.barC = this.bar.selectAll('rect').data(function (d) {
                                         return d.valores;
                                     }).enter();
 
-                                    this.barC.append('rect').attr('height', this.y1.rangeBand()).attr('y', function (d) {
-                                        return _this4.y1(d.name);
-                                    }).attr('x', function (d) {
-                                        return 0;
-                                    }).attr('value', function (d) {
-                                        return d.name;
-                                    }).attr('width', function (d) {
-                                        return _this4.x(d.value);
+                                    this.barC.append('rect').attr('width', this.x1.rangeBand()).attr('x', function (d) {
+                                        return _this4.x1(d.name);
+                                    }).attr('y', function (d) {
+                                        return _this4.y(d.value);
+                                    }).attr('height', function (d) {
+                                        return _this4.height - _this4.y(d.value);
                                     }).style('fill', function (d) {
                                         return _this4.color(d.name);
-                                    });
-
-                                    this.barC.append('text').attr('x', function (d) {
-                                        return _this4.x(d.value) + 5;
-                                    }).attr('y', function (d) {
-                                        return _this4.y1(d.name) + _this4.y1.rangeBand() / 2;
-                                    }).attr('dy', '.35em').text(function (d) {
-                                        return d.value;
-                                    });
-
-                                    this.bar.on('mouseover', function (d) {
-                                        _this4.tips.style('left', 10 + 'px');
-                                        _this4.tips.style('top', 15 + 'px');
-                                        _this4.tips.style('display', "inline-block");
-                                        var elements = d3.selectAll(':hover')[0];
-                                        var elementData = elements[elements.length - 1].__data__;
-                                        _this4.tips.html(d.label + ' , ' + elementData.name + ' ,  ' + elementData.value);
-                                        d3.selectAll('.' + elementData.name)[0][0].style.display = '';
-                                    });
-
-                                    this.bar.on('mouseout', function (d) {
-                                        _this4.tips.style('display', "none");
-                                        d3.selectAll('.avgLine')[0].forEach(function (d) {
-                                            d.style.display = 'none';
-                                        });
+                                    }).on("mouseover", function (d) {
+                                        // this.tips = d3.select(this).append('div').attr('class', 'toolTip')
+                                        // this.tips.style('left', `${10}px`);
+                                        // this.tips.style('top', `${15}px`);
+                                        // this.tips.style('display', "inline-block");
+                                        var color = self.color(d.name);
+                                        // this.tips.html(`${d.name} ,  ${d.value}`);
+                                        d3.select(this).style("fill", d3.rgb(color).darker(2));
+                                        self.tooltip.style('opacity', 0.9).style('left', event.pageX - 34 + 'px').style('top', event.pageY - 12 + 'px').html('<strong>' + d.name + ':</strong><span style=\'color:red\'> ' + d.value + '</span>');
+                                    }).on("mouseout", function (d) {
+                                        d3.select(this).style("fill", self.color(d.name));
+                                        self.tooltip.style('opacity', 0);
                                     });
                                 }
                             }, {
@@ -329,11 +335,15 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                                     this.legend.append('text').attr('x', this.width * 1.1 - 24).attr('y', 9).attr('dy', '.35em').style('text-anchor', 'end').text(function (d) {
                                         return d;
                                     });
+
+                                    this.legend.transition().duration(500).delay(function (d, i) {
+                                        return 1300 + 100 * i;
+                                    }).style("opacity", "1");
                                 }
                             }, {
                                 key: 'addTooltips',
                                 value: function addTooltips() {
-                                    this.tips = d3.select(this.element).append('div').attr('class', 'toolTip');
+                                    this.tooltip = d3.select('body').append('div').attr('class', 'tooltip').style('opacity', 0);
                                 }
                             }]);
 
@@ -342,11 +352,10 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
 
                         function onRender() {
                             if (!ctrl.data) return;
-                            var sample = [{ label: "Machine001", "Off": 20, "Down": 10, "Run": 50, "Idle": 20 }, { label: "Machine002", "Off": 15, "Down": 30, "Run": 40, "Idle": 15 }];
 
                             var Chart = new groupedBarChart({
                                 data: ctrl.data,
-                                margin: { top: 10, left: 80, bottom: 10, right: 10 },
+                                margin: { top: 10, left: 10, bottom: 10, right: 10 },
                                 element: '#chart',
                                 width: ctrl.panel.width,
                                 height: ctrl.panel.height,
