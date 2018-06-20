@@ -173,7 +173,13 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                 }, {
                     key: 'onDataReceived',
                     value: function onDataReceived(dataList) {
-                        var o = _.groupBy(dataList[0].rows, function (e) {
+                        var myData = dataList[0].rows;
+                        if (this.datasource.type == 'prometheus') {
+                            myData = dataList[0].rows.map(function (r) {
+                                return [r[1], r[2], r[3]];
+                            });
+                        }
+                        var o = _.groupBy(myData, function (e) {
                             return e[0];
                         });
                         _.forOwn(o, function (e, i) {
@@ -197,6 +203,7 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                         this.data = res.sort(function (a, b) {
                             return a.label > b.label ? -1 : b.label > a.label ? 1 : 0;
                         });
+
                         this.render();
                     }
                 }, {
@@ -310,12 +317,7 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                                     }).style('fill', function (d) {
                                         return _this4.color(d.name);
                                     }).on("mouseover", function (d) {
-                                        // this.tips = d3.select(this).append('div').attr('class', 'toolTip')
-                                        // this.tips.style('left', `${10}px`);
-                                        // this.tips.style('top', `${15}px`);
-                                        // this.tips.style('display', "inline-block");
                                         var color = self.color(d.name);
-                                        // this.tips.html(`${d.name} ,  ${d.value}`);
                                         d3.select(this).style("fill", d3.rgb(color).darker(2));
                                         self.tooltip.style('opacity', 0.9).style('left', event.pageX - 34 + 'px').style('top', event.pageY - 12 + 'px').html('<strong>' + d.name + ':</strong><span style=\'color:red\'> ' + d.value + '</span>');
                                     }).on("mouseout", function (d) {

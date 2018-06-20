@@ -6,7 +6,7 @@ grouped bar chart
 ### chart
 
 
-![chart](src/img/groupedbarchart.png)
+![chart](src/img/grouped-bar-chart.png)
 
 ### metrics
 

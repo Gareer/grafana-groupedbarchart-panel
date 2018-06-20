@@ -95,7 +95,11 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
     }
 
     onDataReceived(dataList) {
-        let o = _.groupBy(dataList[0].rows, e=>e[0]);
+        let myData = dataList[0].rows;
+        if (this.datasource.type == 'prometheus') {
+            myData = dataList[0].rows.map(r => [r[1], r[2], r[3]]);
+        }
+        let o = _.groupBy(myData, e=>e[0]);
         _.forOwn(o, (e, i)=>{
             let t = _.groupBy(e, sta=>sta[1]);
             o[i] = _.forOwn(t, (sum, tid)=>{t[tid] = sum.map(s=>s[2]).reduce((y,x)=>y+x)})
@@ -107,6 +111,7 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
             res.push(e);
         });
         this.data = res.sort((a, b)=>{return (a.label>b.label)?-1:((b.label>a.label)?1:0)});
+
         this.render();
     }
 
@@ -226,12 +231,7 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
                     .attr('height', d=> { return this.height - this.y(d.value);})
                     .style('fill', d=> { return this.color(d.name);})
                     .on("mouseover", function(d) {
-                        // this.tips = d3.select(this).append('div').attr('class', 'toolTip')
-                        // this.tips.style('left', `${10}px`);
-                        // this.tips.style('top', `${15}px`);
-                        // this.tips.style('display', "inline-block");
                         let color = self.color(d.name);
-                        // this.tips.html(`${d.name} ,  ${d.value}`);
                         d3.select(this).style("fill", d3.rgb(color).darker(2));
                         self.tooltip
                             .style('opacity', 0.9)
