@@ -21,6 +21,7 @@ svg {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 60%;
 }
+body,
 text {
     font: 12px sans-serif;
     fill: #FFF;
@@ -28,19 +29,27 @@ text {
 .axis text {
     font: 12px sans-serif;
 }
-.axis path{
-    fill: none;
-    stroke: #FFF;
-}
+.axis path,
 .axis line {
     fill: none;
     stroke: #FFF;
     shape-rendering: crispEdges;
 }
-.axis .tick line {
-    stroke-width: 1;
-    stroke: rgba(255, 255, 255, 0.2);
-}
 .x.axis path {
     display: none;
+}
+
+.tooltip{
+      position      : absolute;
+      text-align    : center;
+      max-width     : 70px;
+      max-height    : 30px;
+      padding       : 8px;
+      border        : none;
+      border-radius : 8px;
+      margin-top    : -30px;
+      font          : 10px sans-serif;
+      background    : black;
+      color         : white;
+      pointer-events: none;
 }

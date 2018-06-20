@@ -4,8 +4,7 @@ import kbn from 'app/core/utils/kbn';
 import TimeSeries from 'app/core/time_series';
 import * as d3 from './external/d3.v3.min';
 import './css/groupedBarChart.css!';
-// import groupedBarChart from './external/groupedBarChart';
-//TODO: Ajust the size according to window size and display different bars among labels.
+
 const panelDefaults = {
     legend: {
         show: true
@@ -22,8 +21,10 @@ const panelDefaults = {
     valueName: 'current',
     strokeWidth: 1,
     fontSize: '80%',
-    width: 800,
-    height: 400,
+    width: 960,
+    height: 500,
+    fixedWidth: 960,
+    fixedHeight: 500,
     colorSet: [],
     colorSch: []
 };
@@ -37,16 +38,45 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
         this.data = null;
 
         _.defaults(this.panel, panelDefaults);
+        this.setPanelSize();
 
         this.events.on('init-edit-mode', this.onInitEditMode.bind(this));
         this.events.on('data-received', this.onDataReceived.bind(this));
         this.events.on('data-snapshot-load', this.onDataReceived.bind(this));
         this.events.on('data-error', this.onDataError.bind(this));
+        this.events.on('panel-size-changed', this.onPanelSizeChanged.bind(this));
     }
 
     onInitEditMode() {
         this.addEditorTab('Options', 'public/plugins/grafana-groupedbarchart-panel/partials/editor.html', 2);
         this.addEditorTab('Colors', 'public/plugins/grafana-groupedbarchart-panel/partials/colors.html', 3);
+    }
+
+    setPanelSize(isFromUI) {
+        let h = Math.ceil(this.panel.fixedHeight / 30);
+        let w = Math.ceil(this.panel.fixedWidth / 50);
+        if (isFromUI) {
+            // Set panel width and height from panel UI
+            if (w !== this.panel.gridPos.w || h !== this.panel.gridPos.h) {
+                let gridPos = {x: 0, y: 0, w: 0, h: 0};
+                gridPos.h = h;
+                gridPos.w = w;
+                this.panel.updateGridPos(gridPos);
+            }
+        } else {
+            // Read panel width and height from default panel
+            if (w !== this.panel.gridPos.w || h !== this.panel.gridPos.h) {
+                this.panel.fixedHeight = this.panel.gridPos.h * 30;
+                this.panel.fixedWidth = this.panel.gridPos.w * 50;
+            }
+        }
+        this.panel.height =  this.panel.fixedHeight * 0.95;
+        this.panel.width =  this.panel.fixedWidth * 0.85;
+    }
+
+    onPanelSizeChanged(isFromUI) {
+        this.setPanelSize(isFromUI);
+        this.render();
     }
 
     setUnitFormat(subItem) {
@@ -65,11 +95,10 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
     }
 
     onDataReceived(dataList) {
-
         let o = _.groupBy(dataList[0].rows, e=>e[0]);
         _.forOwn(o, (e, i)=>{
             let t = _.groupBy(e, sta=>sta[1]);
-            o[i] = _.forOwn(t, (sum, tid)=>{t[tid] = sum.map(s=>s[2]).reduce((x,y)=>x+y)})
+            o[i] = _.forOwn(t, (sum, tid)=>{t[tid] = sum.map(s=>s[2]).reduce((y,x)=>y+x)})
         });
 
         let res = [];
@@ -99,22 +128,15 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
                 this.height = opts.height;
                 this.showLegend = opts.legend;
                 this.element = elem.find(opts.element)[0];
-                let keyTotalLength = {};
                 this.options = [];
                 this.data.forEach(d => {
                     this.options = _.union(this.options, _.keys(d).filter(k => k !== 'label' && k !==  'valores'));
                 });
-                this.options.forEach(k => {keyTotalLength[k] = 0});
                 this.data.forEach(d => {
                     d.valores = this.options.map(name => {
-                        if (d[name]) keyTotalLength[name] = keyTotalLength[name] + d[name];
-                        return {name: name, value: d[name] || 1};
+                        return {name: name, value: d[name] || 0};
                     });
                 });
-                this.options.forEach(d => {
-                    keyTotalLength[d] /= this.data.length;
-                });
-                this.avgList = keyTotalLength;
                 if(opts.color.length == 0) {
                     this.color = d3.scale.ordinal()
                         .range(d3.scale.category20().range());
@@ -129,9 +151,10 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
             draw() {
                 d3.select(this.element).html("");
                 this.svg = d3.select(this.element).append('svg');
-                this.svg.attr('width', this.width)
-                    .attr('height', this.height)
-                    .attr('transform', `translate(0, ${this.margin.top})`);
+                this.svg.attr('width', this.width + this.margin.left + this.margin.right)
+                        .attr("height", this.height + this.margin.top + this.margin.bottom)
+                        .append("g")
+                        .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
 
                 this.createScales();
                 this.addAxes();
@@ -141,62 +164,55 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
             }
 
             createScales() {
-                this.y0 = d3.scale.ordinal()
-                    .rangeRoundBands([this.height, 0], .2, 0.5);
+                this.x0 = d3.scale.ordinal()
+                    .rangeRoundBands([0, this.width], .5);
 
-                this.y1 = d3.scale.ordinal();
+                this.x1 = d3.scale.ordinal();
 
-                this.x = d3.scale.linear()
-                    .range([0, this.width]);
-
+                this.y = d3.scale.linear()
+                    .range([this.height, 0]);
             }
 
             addAxes() {
                 this.xAxis = d3.svg.axis()
-                    .scale(this.x)
-                    .tickSize(-this.height)
-                    .orient('bottom');
+                    .scale(this.x0)
+                    .tickSize(0)
+                    .orient("bottom");
 
                 this.yAxis = d3.svg.axis()
-                    .scale(this.y0)
-                    .orient('left');
+                    .scale(this.y)
+                    .orient("left");
 
-                this.y0.domain(this.data.map(d=> { return d.label; }));
-                this.y1.domain(this.options).rangeRoundBands([0, this.y0.rangeBand()]);
-                this.x.domain([0, d3.max(this.data, function(d) { return d3.max(d.valores, d=> { return d.value; }); })]);
+                this.x0.domain(this.data.map(d=> { return d.label; }));
+                this.x1.domain(this.options).rangeRoundBands([0, this.x0.rangeBand()]);
+                this.y.domain([0, d3.max(this.data, function(d) { return d3.max(d.valores, d=> { return d.value; }); })]);
 
-                this.svg.append('g')
-                    .attr('class', 'x axis')
-                    .attr('transform', `translate(${this.margin.left}, ${this.height})`)
-                    .call(this.xAxis);
+                this.svg.append("g")
+                  .attr("class", "x axis")
+                  .attr("transform", "translate(0," + this.height + ")")
+                  .call(this.xAxis);
 
-                this.svg.append('g')
-                    .attr('class', 'y axis')
-                    .attr('transform', `translate(${this.margin.left}, 0)`)
-                    .call(this.yAxis);
+                this.svg.append("g")
+                  .attr("class", "y axis")
+                  .style('opacity','0')
+                  .call(this.yAxis)
+                  .append("text")
+                  .attr("transform", "rotate(-90)")
+                  .attr("y", 6)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .style('font-weight','bold')
+                  .text("Value");
             }
 
             addBar() {
-                this.options.forEach(d=> {
-                    this.svg.append('line')
-                        .attr('x1', this.x(this.avgList[d] || 0))
-                        .attr('y1', this.height)
-                        .attr('x2', this.x(this.avgList[d] || 0))
-                        .attr('y2', 0)
-                        .attr('class', `${d} avgLine`)
-                        .attr('transform', `translate(${this.margin.left}, 0)`)
-                        .style('display', 'none')
-                        .style('stroke-width', 0.5)
-                        .style('stroke', this.color(d))
-                        .style('stroke-opacity', 0.7);
-                });
-
+                let self = this;
                 this.bar = this.svg.selectAll('.bar')
                     .data(this.data)
                     .enter().append('g')
-                    .attr('class', 'rect')
+                    .attr('class', 'g')
                     .attr('transform', d=> {
-                        return `translate(${this.margin.left}, ${this.y0(d.label)})`;
+                        return `translate(${this.x0(d.label)}, 0)`;
                     });
 
                 this.barC = this.bar.selectAll('rect')
@@ -204,35 +220,29 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
                     .enter();
 
                 this.barC.append('rect')
-                    .attr('height', this.y1.rangeBand())
-                    .attr('y', d=> { return this.y1(d.name);})
-                    .attr('x', d=> { return 0;})
-                    .attr('value', d=> { return d.name;})
-                    .attr('width', d=> { return this.x(d.value);})
-                    .style('fill', d=> { return this.color(d.name);});
-
-                this.barC.append('text')
-                    .attr('x', d=> { return this.x(d.value) +5;  })
-                    .attr('y', d=> { return this.y1(d.name) +(this.y1.rangeBand()/2); })
-                    .attr('dy', '.35em')
-                    .text(d=> { return d.value; });
-
-                // this.bar.on('mouseover', d=> {
-                //     this.tips.style('left', `${10}px`);
-                //     this.tips.style('top', `${15}px`);
-                //     this.tips.style('display', "inline-block");
-                //     let elements = d3.selectAll(':hover')[0];
-                //     let elementData = elements[elements.length-1].__data__;
-                //     this.tips.html(`${d.label} , ${elementData.name} ,  ${elementData.value}`);
-                //     d3.selectAll(`.${elementData.name}`)[0][0].style.display = '';
-                // });
-
-                // this.bar.on('mouseout', d=> {
-                //     this.tips.style('display', "none");
-                //     d3.selectAll('.avgLine')[0].forEach(d=> {
-                //        d.style.display = 'none';
-                //     });
-                // });
+                    .attr('width', this.x1.rangeBand())
+                    .attr('x', d=> { return this.x1(d.name);})
+                    .attr('y', d=> { return this.y(d.value);})
+                    .attr('height', d=> { return this.height - this.y(d.value);})
+                    .style('fill', d=> { return this.color(d.name);})
+                    .on("mouseover", function(d) {
+                        // this.tips = d3.select(this).append('div').attr('class', 'toolTip')
+                        // this.tips.style('left', `${10}px`);
+                        // this.tips.style('top', `${15}px`);
+                        // this.tips.style('display', "inline-block");
+                        let color = self.color(d.name);
+                        // this.tips.html(`${d.name} ,  ${d.value}`);
+                        d3.select(this).style("fill", d3.rgb(color).darker(2));
+                        self.tips
+                            .style('display', 'inline')
+                            .style('left', (event.pageX - 34) + 'px')
+                            .style('top', (event.pageY - 12) + 'px')
+                            .html(`<strong>${d.name}:</strong> <span style='color:red'>${d.value}</span>`);
+                    })
+                    .on("mouseout", function(d) {
+                        d3.select(this).style("fill", self.color(d.name));
+                        self.tips.style('display', "none");
+                    });
             }
 
             addLegend() {
@@ -254,24 +264,23 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
                     .attr('dy', '.35em')
                     .style('text-anchor', 'end')
                     .text(d=> { return d; });
+
+                this.legend.transition().duration(500).delay(function(d,i){ return 1300 + 100 * i; }).style("opacity","1");
             }
 
             addTooltips() {
-                this.tips = d3.select(this.element).append('div')
-                    .attr('class', 'toolTip');
+                this.tips = this.svg.append('div')
+                                    .attr('class', 'tooltip')
+                                    .style('display', 'none');
             }
         }
 
         function onRender() {
             if(!ctrl.data) return;
-            let sample = [
-                {label:"Machine001", "Off":20, "Down":10, "Run": 50, "Idle":20},
-                {label:"Machine002", "Off":15, "Down":30, "Run":40, "Idle":15}
-            ];
 
-            var Chart = new groupedBarChart({
+            let Chart = new groupedBarChart({
                 data: ctrl.data,
-                margin: {top: 10, left: 80, bottom: 10, right: 10},
+                margin: {top: 10, left: 10, bottom: 10, right: 10},
                 element: '#chart',
                 width: ctrl.panel.width,
                 height: ctrl.panel.height,
