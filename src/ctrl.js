@@ -71,7 +71,7 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
             }
         }
         this.panel.height =  this.panel.fixedHeight * 0.95;
-        this.panel.width =  this.panel.fixedWidth * 0.85;
+        this.panel.width =  this.panel.fixedWidth * 0.8;
     }
 
     onPanelSizeChanged(isFromUI) {
@@ -95,9 +95,28 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
     }
 
     onDataReceived(dataList) {
+        // only support table format and support 3 columns: label, legend, value
+        if (dataList.length < 1 || !dataList[0].rows || dataList[0].rows.length < 1) {
+            console.log('no data');
+            return;
+        }
+        if (dataList[0].type !== 'table') {
+            console.log('only support table format!');
+            return;
+        }
         let myData = dataList[0].rows;
-        if (this.datasource.type == 'prometheus') {
-            myData = dataList[0].rows.map(r => [r[1], r[2], r[3]]);
+        if (this.datasource.type === 'prometheus' || this.datasource.type === 'influxdb') {
+            // default takes 4 columns of data: time, label, legend, value
+            let legendColumn = this.panel.targets[0].legendFormat;
+            let vIndex = myData[0].length - 1;
+            let legendIndex = _.isUndefined(legendColumn) ? vIndex - 1 : this.findColumnIndex(dataList[0].columns, legendColumn);
+            let labelIndex = vIndex - legendIndex > 1 ? legendIndex + 1 : legendIndex - 1;
+            if (legendIndex < 0 || labelIndex < 0 || labelIndex >= vIndex) {
+                console.log('data length is invalid.');
+                return;
+            } else {
+                myData = dataList[0].rows.map(r => [r[labelIndex], r[legendIndex], r[vIndex]]);
+            }
         }
         let o = _.groupBy(myData, e=>e[0]);
         _.forOwn(o, (e, i)=>{
@@ -113,6 +132,16 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
         this.data = res.sort((a, b)=>{return (a.label>b.label)?-1:((b.label>a.label)?1:0)});
 
         this.render();
+    }
+
+    findColumnIndex(data, column) {
+        let index = -1;
+        _.each(data, (d,i) => {
+            if (d.text === column) {
+                index = i;
+            }
+        })
+        return index;
     }
 
     formatValue(value) {
