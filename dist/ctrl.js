@@ -218,7 +218,7 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                             res.push(e);
                         });
                         this.data = res.sort(function (a, b) {
-                            return a.label > b.label ? -1 : b.label > a.label ? 1 : 0;
+                            return a.label < b.label ? -1 : b.label < a.label ? 1 : 0;
                         });
 
                         this.render();
