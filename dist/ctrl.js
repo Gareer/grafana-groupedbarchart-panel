@@ -140,7 +140,7 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                             }
                         }
                         this.panel.height = this.panel.fixedHeight * 0.95;
-                        this.panel.width = this.panel.fixedWidth * 0.85;
+                        this.panel.width = this.panel.fixedWidth * 0.8;
                     }
                 }, {
                     key: 'onPanelSizeChanged',
@@ -173,11 +173,30 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                 }, {
                     key: 'onDataReceived',
                     value: function onDataReceived(dataList) {
+                        // only support table format and support 3 columns: label, legend, value
+                        if (dataList.length < 1 || !dataList[0].rows || dataList[0].rows.length < 1) {
+                            console.log('no data');
+                            return;
+                        }
+                        if (dataList[0].type !== 'table') {
+                            console.log('only support table format!');
+                            return;
+                        }
                         var myData = dataList[0].rows;
-                        if (this.datasource.type == 'prometheus') {
-                            myData = dataList[0].rows.map(function (r) {
-                                return [r[1], r[2], r[3]];
-                            });
+                        if (this.datasource.type === 'prometheus' || this.datasource.type === 'influxdb') {
+                            // default takes 4 columns of data: time, label, legend, value
+                            var legendColumn = this.panel.targets[0].legendFormat;
+                            var vIndex = myData[0].length - 1;
+                            var legendIndex = _.isUndefined(legendColumn) ? vIndex - 1 : this.findColumnIndex(dataList[0].columns, legendColumn);
+                            var labelIndex = vIndex - legendIndex > 1 ? legendIndex + 1 : legendIndex - 1;
+                            if (legendIndex < 0 || labelIndex < 0 || labelIndex >= vIndex) {
+                                console.log('data length is invalid.');
+                                return;
+                            } else {
+                                myData = dataList[0].rows.map(function (r) {
+                                    return [r[labelIndex], r[legendIndex], r[vIndex]];
+                                });
+                            }
                         }
                         var o = _.groupBy(myData, function (e) {
                             return e[0];
@@ -186,12 +205,10 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                             var t = _.groupBy(e, function (sta) {
                                 return sta[1];
                             });
-                            o[i] = _.forOwn(t, function (sum, tid) {
-                                t[tid] = sum.map(function (s) {
+                            o[i] = _.forOwn(t, function (items, tid) {
+                                t[tid] = _.max(items.map(function (s) {
                                     return s[2];
-                                }).reduce(function (y, x) {
-                                    return y + x;
-                                });
+                                }));
                             });
                         });
 
@@ -205,6 +222,17 @@ System.register(['app/plugins/sdk', 'lodash', 'app/core/utils/kbn', 'app/core/ti
                         });
 
                         this.render();
+                    }
+                }, {
+                    key: 'findColumnIndex',
+                    value: function findColumnIndex(data, column) {
+                        var index = -1;
+                        _.each(data, function (d, i) {
+                            if (d.text === column) {
+                                index = i;
+                            }
+                        });
+                        return index;
                     }
                 }, {
                     key: 'formatValue',

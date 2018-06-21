@@ -42,7 +42,7 @@ text {
 .tooltip{
       position      : absolute;
       text-align    : left;
-      max-width     : 150px;
+      /*max-width     : 150px;*/
       max-height    : 30px;
       padding       : 8px;
       border        : none;

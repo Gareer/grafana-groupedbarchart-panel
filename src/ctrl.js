@@ -121,7 +121,7 @@ export class GroupedBarChartCtrl extends MetricsPanelCtrl {
         let o = _.groupBy(myData, e=>e[0]);
         _.forOwn(o, (e, i)=>{
             let t = _.groupBy(e, sta=>sta[1]);
-            o[i] = _.forOwn(t, (sum, tid)=>{t[tid] = sum.map(s=>s[2]).reduce((y,x)=>y+x)})
+            o[i] = _.forOwn(t, (items, tid)=>{t[tid] = _.max(items.map(s=>s[2]))})
         });
 
         let res = [];
